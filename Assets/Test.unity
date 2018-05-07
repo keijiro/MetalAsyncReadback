@@ -205,6 +205,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e94f4b9d43e774b9598ac9cd75ea3453, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _mode: 0
+  _bufferSize: 2073600
   _compute: {fileID: 7200000, guid: 0657c027b4d2b4d5788cbc2d84f6b9e9, type: 3}
 --- !u!4 &1439277537
 Transform:
