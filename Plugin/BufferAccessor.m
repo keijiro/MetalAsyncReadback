@@ -69,6 +69,7 @@ static void CopyBufferCallback(int evendID, void *data)
     
     id <MTLBlitCommandEncoder> blit = [s_graphics->CurrentCommandBuffer() blitCommandEncoder];
     [blit copyFromBuffer:source sourceOffset:0 toBuffer:destination destinationOffset:0 size:args->length];
+    [blit synchronizeResource:destination];
     [blit endEncoding];
 }
 
