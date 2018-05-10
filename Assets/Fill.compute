@@ -1,4 +1,4 @@
-﻿#pragma kernel CSMain
+#pragma kernel CSMain
 
 RWBuffer<uint> Destination;
 uint FrameCount;

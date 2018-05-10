@@ -28,7 +28,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
 
 void *BufferAccessor_Create(uint32_t size)
 {
-    id <MTLBuffer> buffer = [GetMetalDevice() newBufferWithLength:size options:MTLResourceStorageModeManaged];
+    id <MTLBuffer> buffer = [GetMetalDevice() newBufferWithLength:size options:MTLResourceStorageModeShared];
     return (__bridge_retained void*)buffer;
 }
 
