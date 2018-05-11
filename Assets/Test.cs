@@ -49,7 +49,7 @@ public class Test : MonoBehaviour
 
     #endregion
 
-    #region Command buffer
+    #region Shared command buffer for temporary use
 
     CommandBuffer _command;
 
@@ -59,14 +59,13 @@ public class Test : MonoBehaviour
 
     struct Readback
     {
-        public GCHandle args;
-        public IntPtr buffer;
+        public GCHandle pluginArgs;
+        public IntPtr receiveBuffer;
 
         public void ReleaseResources()
         {
-            args.Free();
-            BufferAccessor_Destroy(buffer);
-            BufferAccessor_Destroy(buffer);
+            pluginArgs.Free();
+            BufferAccessor_Destroy(receiveBuffer);
         }
     }
 
@@ -77,24 +76,19 @@ public class Test : MonoBehaviour
     #region Readback thread
 
     Thread[] _readbackThreads;
-    AutoResetEvent _readbackRequest;
-    bool _readbackThreadStop;
+    AutoResetEvent _readbackEvent;
 
     void ReadbackThreadFunction()
     {
-        while (!_readbackThreadStop)
+        while (true)
         {
-            _readbackRequest.WaitOne();
-
-            if (_readbackThreadStop) break;
+            _readbackEvent.WaitOne();
 
             Readback readback;
             lock (_readbackQueue) readback = _readbackQueue.Dequeue();
 
-            var pointer = BufferAccessor_GetContents(readback.buffer);
-            Debug.Log(">>" + pointer);
+            var pointer = BufferAccessor_GetContents(readback.receiveBuffer);
             Marshal.Copy(pointer, _managedBuffer, 0, _bufferSize);
-            Debug.Log("<<" + pointer);
 
             readback.ReleaseResources();
         }
@@ -113,9 +107,8 @@ public class Test : MonoBehaviour
 
         _readbackQueue = new Queue<Readback>();
 
-        _readbackThreads = new Thread[6];
-        _readbackRequest = new AutoResetEvent(false);
-        _readbackThreadStop = false;
+        _readbackThreads = new Thread[5];
+        _readbackEvent = new AutoResetEvent(false);
 
         for (var i = 0; i < _readbackThreads.Length; i++)
         {
@@ -126,13 +119,7 @@ public class Test : MonoBehaviour
 
     void OnDisable()
     {
-        //_readbackThreadStop = true;
-        //_readbackRequest.Close();
-
-        foreach (var th in _readbackThreads)
-        th.Abort();
-            //if (th.ThreadState != ThreadState.Unstarted) th.Join();
-
+        foreach (var th in _readbackThreads) th.Abort();
         _readbackThreads = null;
 
         _gpuBuffer.Dispose();
@@ -146,7 +133,7 @@ public class Test : MonoBehaviour
         while (_readbackQueue.Count > 0)
             _readbackQueue.Dequeue().ReleaseResources();
 
-        _readbackRequest = null;
+        _readbackEvent = null;
     }
 
     void Update()
@@ -160,7 +147,7 @@ public class Test : MonoBehaviour
         var ibuffer = BufferAccessor_Create(_bufferSize * 4);
 
         var readback = new Readback {
-            args = GCHandle.Alloc(
+            pluginArgs = GCHandle.Alloc(
                 new CopyBufferArgs {
                     source = _gpuBuffer.GetNativeBufferPtr(),
                     destination = ibuffer,
@@ -168,18 +155,18 @@ public class Test : MonoBehaviour
                 },
                 GCHandleType.Pinned
             ),
-            buffer = ibuffer
+            receiveBuffer = ibuffer
         };
 
         _command.Clear();
         _command.IssuePluginEventAndData(
             BufferAccessor_GetCopyBufferCallback(),
-            0, readback.args.AddrOfPinnedObject()
+            0, readback.pluginArgs.AddrOfPinnedObject()
         );
         Graphics.ExecuteCommandBuffer(_command);
 
         lock (_readbackQueue) _readbackQueue.Enqueue(readback);
-        _readbackRequest.Set();
+        _readbackEvent.Set();
 
         Debug.Log(_managedBuffer[_bufferSize - 1]);
     }
