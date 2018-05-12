@@ -28,17 +28,16 @@ public class Test : MonoBehaviour
         public int length;
     }
 
-    [DllImport("BufferAccessor")]
-    static extern IntPtr BufferAccessor_Create(int size);
+    #if !UNITY_EDITOR && UNITY_IOS
+    const string dllName = "__Internal";
+    #else
+    const string dllName = "BufferAccessor";
+    #endif
 
-    [DllImport("BufferAccessor")]
-    static extern void BufferAccessor_Destroy(IntPtr buffer);
-
-    [DllImport("BufferAccessor")]
-    static extern IntPtr BufferAccessor_GetContents(IntPtr buffer);
-
-    [DllImport("BufferAccessor")]
-    static extern IntPtr BufferAccessor_GetCopyBufferCallback();
+    [DllImport(dllName)] static extern IntPtr BufferAccessor_Create(int size);
+    [DllImport(dllName)] static extern void BufferAccessor_Destroy(IntPtr buffer);
+    [DllImport(dllName)] static extern IntPtr BufferAccessor_GetContents(IntPtr buffer);
+    [DllImport(dllName)] static extern IntPtr BufferAccessor_GetCopyBufferCallback();
 
     #endregion
 
