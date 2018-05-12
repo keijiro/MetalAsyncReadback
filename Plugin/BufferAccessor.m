@@ -2,6 +2,8 @@
 #import "Unity/IUnityGraphics.h"
 #import "Unity/IUnityGraphicsMetal.h"
 
+//#define USE_MANAGED_STORAGE
+
 #pragma mark Device interface retrieval
 
 static IUnityInterfaces *s_interfaces;
@@ -28,7 +30,11 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
 
 void *BufferAccessor_Create(uint32_t size)
 {
+#ifdef USE_MANAGED_STORAGE
+    id <MTLBuffer> buffer = [GetMetalDevice() newBufferWithLength:size options:MTLResourceStorageModeManaged];
+#else
     id <MTLBuffer> buffer = [GetMetalDevice() newBufferWithLength:size options:MTLResourceStorageModeShared];
+#endif
     return (__bridge_retained void*)buffer;
 }
 
@@ -69,7 +75,9 @@ static void CopyBufferCallback(int evendID, void *data)
     
     id <MTLBlitCommandEncoder> blit = [s_graphics->CurrentCommandBuffer() blitCommandEncoder];
     [blit copyFromBuffer:source sourceOffset:0 toBuffer:destination destinationOffset:0 size:args->length];
+#ifdef USE_MANAGED_STORAGE
     [blit synchronizeResource:destination];
+#endif
     [blit endEncoding];
 }
 
