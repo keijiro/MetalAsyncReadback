@@ -55,42 +55,36 @@ public class Test : MonoBehaviour
 
     #endregion
 
-    #region Readback queue
+    #region Frame queue
 
-    struct Readback
+    struct Frame
     {
-        public GCHandle pluginArgs;
-        public IntPtr receiveBuffer;
+        public IntPtr copyBuffer;
+        public GCHandle copyBufferArgs;
 
         public void ReleaseResources()
         {
-            pluginArgs.Free();
-            BufferAccessor_Destroy(receiveBuffer);
+            if (copyBufferArgs.IsAllocated) copyBufferArgs.Free();
+            if (copyBuffer != IntPtr.Zero) BufferAccessor_Destroy(copyBuffer);
         }
     }
 
-    Queue<Readback> _readbackQueue;
+    Queue<Frame> _frameQueue = new Queue<Frame>();
 
     #endregion
 
     #region Readback thread
 
-    Thread[] _readbackThreads;
-    AutoResetEvent _readbackEvent;
+    Stack<Thread> _readbackThreads = new Stack<Thread>();
+    AutoResetEvent _readbackEvent = new AutoResetEvent(false);
+    IntPtr _readbackSource;
 
     void ReadbackThreadFunction()
     {
         while (true)
         {
             _readbackEvent.WaitOne();
-
-            Readback readback;
-            lock (_readbackQueue) readback = _readbackQueue.Dequeue();
-
-            var pointer = BufferAccessor_GetContents(readback.receiveBuffer);
-            Marshal.Copy(pointer, _managedBuffer, 0, _bufferSize);
-
-            readback.ReleaseResources();
+            Marshal.Copy(_readbackSource, _managedBuffer, 0, _bufferSize);
         }
     }
 
@@ -102,25 +96,16 @@ public class Test : MonoBehaviour
     {
         _gpuBuffer = new ComputeBuffer(_bufferSize, 4);
         _managedBuffer = new int [_bufferSize];
-
         _command = new CommandBuffer();
-
-        _readbackQueue = new Queue<Readback>();
-
-        _readbackThreads = new Thread[5];
-        _readbackEvent = new AutoResetEvent(false);
-
-        for (var i = 0; i < _readbackThreads.Length; i++)
-        {
-            _readbackThreads[i] = new Thread(ReadbackThreadFunction);
-            _readbackThreads[i].Start(i);
-        }
     }
 
     void OnDisable()
     {
-        foreach (var th in _readbackThreads) th.Abort();
-        _readbackThreads = null;
+        while (_readbackThreads.Count > 0)
+            _readbackThreads.Pop().Abort();
+
+        while (_frameQueue.Count > 0)
+            _frameQueue.Dequeue().ReleaseResources();
 
         _gpuBuffer.Dispose();
         _gpuBuffer = null;
@@ -129,43 +114,49 @@ public class Test : MonoBehaviour
 
         _command.Dispose();
         _command = null;
-
-        while (_readbackQueue.Count > 0)
-            _readbackQueue.Dequeue().ReleaseResources();
-
-        _readbackEvent = null;
     }
 
     void Update()
     {
+        while (_frameQueue.Count < 3)
+        {
+            _frameQueue.Enqueue(new Frame{
+                copyBuffer = BufferAccessor_Create(_bufferSize * 4)
+            });
+        }
+
+        while (_readbackThreads.Count < 4)
+        {
+            _readbackThreads.Push(new Thread(ReadbackThreadFunction));
+            _readbackThreads.Peek().Start();
+        }
+
         _compute.SetBuffer(0, "Destination", _gpuBuffer);
         _compute.SetInt("FrameCount", Time.frameCount);
         _compute.Dispatch(0, _bufferSize / 64, 1, 1);
 
-        if (_readbackQueue.Count > _readbackThreads.Length - 1) return;
+        var frame = _frameQueue.Dequeue();
 
-        var ibuffer = BufferAccessor_Create(_bufferSize * 4);
-
-        var readback = new Readback {
-            pluginArgs = GCHandle.Alloc(
-                new CopyBufferArgs {
-                    source = _gpuBuffer.GetNativeBufferPtr(),
-                    destination = ibuffer,
-                    length = _bufferSize * 4
-                },
-                GCHandleType.Pinned
-            ),
-            receiveBuffer = ibuffer
-        };
+        frame.copyBufferArgs = GCHandle.Alloc(
+            new CopyBufferArgs {
+                source = _gpuBuffer.GetNativeBufferPtr(),
+                destination = frame.copyBuffer,
+                length = _bufferSize * 4
+            },
+            GCHandleType.Pinned
+        );
 
         _command.Clear();
         _command.IssuePluginEventAndData(
             BufferAccessor_GetCopyBufferCallback(),
-            0, readback.pluginArgs.AddrOfPinnedObject()
+            0, frame.copyBufferArgs.AddrOfPinnedObject()
         );
         Graphics.ExecuteCommandBuffer(_command);
 
-        lock (_readbackQueue) _readbackQueue.Enqueue(readback);
+        _frameQueue.Enqueue(frame);
+
+        frame = _frameQueue.Peek();
+        _readbackSource = BufferAccessor_GetContents(frame.copyBuffer);
         _readbackEvent.Set();
 
         Debug.Log(_managedBuffer[_bufferSize - 1]);
