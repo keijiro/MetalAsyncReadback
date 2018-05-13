@@ -76,7 +76,8 @@ public class Test : MonoBehaviour
         }
     }
 
-    Queue<Frame> _frameQueue = new Queue<Frame>();
+    Queue<Frame> _frameQueue1 = new Queue<Frame>();
+    Queue<Frame> _frameQueue2 = new Queue<Frame>();
 
     #endregion
 
@@ -104,10 +105,13 @@ public class Test : MonoBehaviour
 
     void SetupReadback()
     {
-        while (_frameQueue.Count < 3)
-            _frameQueue.Enqueue(new Frame(_bufferSize));
+        while (_frameQueue1.Count < 2)
+            _frameQueue1.Enqueue(new Frame(_bufferSize));
 
-        while (_readbackThreads.Count < 3)
+        while (_frameQueue2.Count < 2)
+            _frameQueue2.Enqueue(new Frame(_bufferSize));
+
+        while (_readbackThreads.Count < 2)
         {
             _readbackThreads.Push(new Thread(ReadbackThreadFunction));
             _readbackThreads.Peek().Start();
@@ -119,8 +123,11 @@ public class Test : MonoBehaviour
         while (_readbackThreads.Count > 0)
             _readbackThreads.Pop().Abort();
 
-        while (_frameQueue.Count > 0)
-            _frameQueue.Dequeue().ReleaseResources();
+        while (_frameQueue1.Count > 0)
+            _frameQueue1.Dequeue().ReleaseResources();
+
+        while (_frameQueue2.Count > 0)
+            _frameQueue2.Dequeue().ReleaseResources();
     }
 
     void UpdateGpuBuffer()
@@ -132,7 +139,7 @@ public class Test : MonoBehaviour
 
     void QueueFrame()
     {
-        var frame = _frameQueue.Dequeue();
+        var frame = _frameQueue2.Dequeue();
 
         frame.copyBufferArgs = GCHandle.Alloc(
             new CopyBufferArgs {
@@ -150,15 +157,16 @@ public class Test : MonoBehaviour
         );
         Graphics.ExecuteCommandBuffer(_command);
 
-        _frameQueue.Enqueue(frame);
+        _frameQueue1.Enqueue(frame);
     }
 
     void KickReadback()
     {
-        var frame = _frameQueue.Peek();
+        var frame = _frameQueue1.Dequeue();
         _readbackSource = BufferAccessor_GetContents(frame.copyBuffer);
         _readbackDestination = frame.managedBuffer;
         _readbackEvent.Set();
+        _frameQueue2.Enqueue(frame);
     }
 
     #endregion
