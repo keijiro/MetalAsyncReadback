@@ -6,5 +6,6 @@ uint FrameCount;
 [numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
-    Destination[id.x] = FrameCount;
+    Destination[id.x] =
+        ((id.x & 0xffff) << 16) | (FrameCount & 0xffff);
 }

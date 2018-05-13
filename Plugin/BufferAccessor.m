@@ -28,7 +28,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
 
 #pragma mark Buffer management
 
-void *BufferAccessor_Create(uint32_t size)
+void *BufferAccessor_Create(int32_t size)
 {
 #ifdef USE_MANAGED_STORAGE
     id <MTLBuffer> buffer = [GetMetalDevice() newBufferWithLength:size options:MTLResourceStorageModeManaged];
@@ -56,7 +56,7 @@ typedef struct
 {
     void* source;
     void* destination;
-    uint32_t length;
+    int32_t length;
 }
 CopyBufferArgs;
 

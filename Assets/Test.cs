@@ -29,22 +29,21 @@ public class Test : MonoBehaviour
     }
 
     #if !UNITY_EDITOR && UNITY_IOS
-    const string dllName = "__Internal";
+    const string _dllName = "__Internal";
     #else
-    const string dllName = "BufferAccessor";
+    const string _dllName = "BufferAccessor";
     #endif
 
-    [DllImport(dllName)] static extern IntPtr BufferAccessor_Create(int size);
-    [DllImport(dllName)] static extern void BufferAccessor_Destroy(IntPtr buffer);
-    [DllImport(dllName)] static extern IntPtr BufferAccessor_GetContents(IntPtr buffer);
-    [DllImport(dllName)] static extern IntPtr BufferAccessor_GetCopyBufferCallback();
+    [DllImport(_dllName)] static extern IntPtr BufferAccessor_Create(int size);
+    [DllImport(_dllName)] static extern void BufferAccessor_Destroy(IntPtr buffer);
+    [DllImport(_dllName)] static extern IntPtr BufferAccessor_GetContents(IntPtr buffer);
+    [DllImport(_dllName)] static extern IntPtr BufferAccessor_GetCopyBufferCallback();
 
     #endregion
 
     #region Source and destination buffers
 
     ComputeBuffer _gpuBuffer;
-    int [] _managedBuffer;
 
     #endregion
 
@@ -58,13 +57,22 @@ public class Test : MonoBehaviour
 
     struct Frame
     {
-        public IntPtr copyBuffer;
         public GCHandle copyBufferArgs;
+        public IntPtr copyBuffer;
+        public int [] managedBuffer;
+
+        public Frame(int bufferSize)
+        {
+            copyBufferArgs = new GCHandle();
+            copyBuffer = BufferAccessor_Create(4 * bufferSize);
+            managedBuffer = new int [bufferSize];
+        }
 
         public void ReleaseResources()
         {
-            if (copyBufferArgs.IsAllocated) copyBufferArgs.Free();
             if (copyBuffer != IntPtr.Zero) BufferAccessor_Destroy(copyBuffer);
+            if (copyBufferArgs.IsAllocated) copyBufferArgs.Free();
+            managedBuffer = null;
         }
     }
 
@@ -77,63 +85,53 @@ public class Test : MonoBehaviour
     Stack<Thread> _readbackThreads = new Stack<Thread>();
     AutoResetEvent _readbackEvent = new AutoResetEvent(false);
     IntPtr _readbackSource;
+    int[] _readbackDestination;
 
     void ReadbackThreadFunction()
     {
         while (true)
         {
             _readbackEvent.WaitOne();
-            Marshal.Copy(_readbackSource, _managedBuffer, 0, _bufferSize);
+            var dest = _readbackDestination;
+            Marshal.Copy(_readbackSource, dest, 0, _bufferSize);
+            Debug.Log(String.Format("{0:X} : {1:X}", dest[1], dest[_bufferSize - 1]));
         }
     }
 
     #endregion
 
-    #region MonoBehaviour implementation
+    #region Internal methods
 
-    void OnEnable()
+    void SetupReadback()
     {
-        _gpuBuffer = new ComputeBuffer(_bufferSize, 4);
-        _managedBuffer = new int [_bufferSize];
-        _command = new CommandBuffer();
+        while (_frameQueue.Count < 3)
+            _frameQueue.Enqueue(new Frame(_bufferSize));
+
+        while (_readbackThreads.Count < 3)
+        {
+            _readbackThreads.Push(new Thread(ReadbackThreadFunction));
+            _readbackThreads.Peek().Start();
+        }
     }
 
-    void OnDisable()
+    void FinalizeReadback()
     {
         while (_readbackThreads.Count > 0)
             _readbackThreads.Pop().Abort();
 
         while (_frameQueue.Count > 0)
             _frameQueue.Dequeue().ReleaseResources();
-
-        _gpuBuffer.Dispose();
-        _gpuBuffer = null;
-
-        _managedBuffer = null;
-
-        _command.Dispose();
-        _command = null;
     }
 
-    void Update()
+    void UpdateGpuBuffer()
     {
-        while (_frameQueue.Count < 3)
-        {
-            _frameQueue.Enqueue(new Frame{
-                copyBuffer = BufferAccessor_Create(_bufferSize * 4)
-            });
-        }
-
-        while (_readbackThreads.Count < 4)
-        {
-            _readbackThreads.Push(new Thread(ReadbackThreadFunction));
-            _readbackThreads.Peek().Start();
-        }
-
         _compute.SetBuffer(0, "Destination", _gpuBuffer);
         _compute.SetInt("FrameCount", Time.frameCount);
         _compute.Dispatch(0, _bufferSize / 64, 1, 1);
+    }
 
+    void QueueFrame()
+    {
         var frame = _frameQueue.Dequeue();
 
         frame.copyBufferArgs = GCHandle.Alloc(
@@ -153,12 +151,43 @@ public class Test : MonoBehaviour
         Graphics.ExecuteCommandBuffer(_command);
 
         _frameQueue.Enqueue(frame);
+    }
 
-        frame = _frameQueue.Peek();
+    void KickReadback()
+    {
+        var frame = _frameQueue.Peek();
         _readbackSource = BufferAccessor_GetContents(frame.copyBuffer);
+        _readbackDestination = frame.managedBuffer;
         _readbackEvent.Set();
+    }
 
-        Debug.Log(_managedBuffer[_bufferSize - 1]);
+    #endregion
+
+    #region MonoBehaviour implementation
+
+    void OnEnable()
+    {
+        _gpuBuffer = new ComputeBuffer(_bufferSize, 4);
+        _command = new CommandBuffer();
+    }
+
+    void OnDisable()
+    {
+        FinalizeReadback();
+
+        _gpuBuffer.Dispose();
+        _gpuBuffer = null;
+
+        _command.Dispose();
+        _command = null;
+    }
+
+    void Update()
+    {
+        SetupReadback();
+        UpdateGpuBuffer();
+        QueueFrame();
+        KickReadback();
     }
 
     #endregion
