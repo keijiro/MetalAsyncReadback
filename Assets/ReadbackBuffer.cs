@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -84,22 +86,22 @@ public class ReadbackBuffer : IDisposable
 
     struct Frame
     {
-        public GCHandle copyArgs;
+        public NativeArray<CopyBufferEventArgs> copyArgs;
         public IntPtr copyBuffer;
-        public int [] readBuffer;
+        public NativeArray<int> readBuffer;
 
         public Frame(int bufferSize)
         {
-            copyArgs = new GCHandle();
+            copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
             copyBuffer = BufferAccessor_Create(4 * bufferSize);
-            readBuffer = new int [bufferSize];
+            readBuffer = new NativeArray<int>(bufferSize, Allocator.Persistent);
         }
 
         public void ReleaseResources()
         {
             if (copyBuffer != IntPtr.Zero) BufferAccessor_Destroy(copyBuffer);
-            if (copyArgs.IsAllocated) copyArgs.Free();
-            readBuffer = null;
+            copyArgs.Dispose();
+            readBuffer.Dispose();
         }
     }
 
@@ -113,7 +115,7 @@ public class ReadbackBuffer : IDisposable
     struct RetrievalArgs
     {
         public IntPtr source;
-        public int[] destination;
+        public NativeArray<int> destination;
         public int count;
     }
 
@@ -121,20 +123,28 @@ public class ReadbackBuffer : IDisposable
     AutoResetEvent _retrievalEvent = new AutoResetEvent(false);
     RetrievalArgs _retrievalArgs;
 
-    void RetrievalThreadFunction()
+    public NativeArray<int> nativeArray {
+        get {
+            if (_retrievalQueue.Count == 0)
+                return new NativeArray<int>();
+            else
+                return _retrievalQueue.Peek().readBuffer;
+        }
+    }
+
+    unsafe void RetrievalThreadFunction()
     {
         while (true)
         {
             _retrievalEvent.WaitOne();
 
             var args = _retrievalArgs;
-            Marshal.Copy(args.source, args.destination, 0, args.count);
 
-            Debug.Log(String.Format(
-                "{0:X} : {1:X}",
-                args.destination[0],
-                args.destination[args.count - 1]
-            ));
+            UnsafeUtility.MemCpy(
+                args.destination.GetUnsafePtr(),
+                (void*)args.source,
+                args.count * 4
+            );
         }
     }
 
@@ -144,7 +154,7 @@ public class ReadbackBuffer : IDisposable
 
     void SetupQueue()
     {
-        while (_copyFrameQueue.Count < 2)
+        while (_copyFrameQueue.Count < 4)
             _copyFrameQueue.Enqueue(new Frame(_sourceBuffer.count));
 
         while (_retrievalQueue.Count < 2)
@@ -169,23 +179,20 @@ public class ReadbackBuffer : IDisposable
             _retrievalQueue.Dequeue().ReleaseResources();
     }
 
-    void QueueFrame()
+    unsafe void QueueFrame()
     {
         var frame = _retrievalQueue.Dequeue();
 
-        frame.copyArgs = GCHandle.Alloc(
-            new CopyBufferEventArgs {
-                source = _sourceBuffer.GetNativeBufferPtr(),
-                destination = frame.copyBuffer,
-                lengthInBytes = _sourceBuffer.count * 4
-            },
-            GCHandleType.Pinned
-        );
+        frame.copyArgs[0] = new CopyBufferEventArgs {
+            source = _sourceBuffer.GetNativeBufferPtr(),
+            destination = frame.copyBuffer,
+            lengthInBytes = _sourceBuffer.count * 4
+        };
 
         _command.Clear();
         _command.IssuePluginEventAndData(
             BufferAccessor_GetCopyBufferCallback(),
-            0, frame.copyArgs.AddrOfPinnedObject()
+            0, (IntPtr)frame.copyArgs.GetUnsafePtr()
         );
         Graphics.ExecuteCommandBuffer(_command);
 
