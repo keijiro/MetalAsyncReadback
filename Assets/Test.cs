@@ -94,7 +94,7 @@ public class Test : MonoBehaviour
             _readbackEvent.WaitOne();
             var dest = _readbackDestination;
             Marshal.Copy(_readbackSource, dest, 0, _bufferSize);
-            Debug.Log(String.Format("{0:X} : {1:X}", dest[1], dest[_bufferSize - 1]));
+            Debug.Log(String.Format("{0:X} : {1:X}", dest[0], dest[_bufferSize - 1]));
         }
     }
 

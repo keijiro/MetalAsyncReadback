@@ -74,7 +74,9 @@ static void CopyBufferCallback(int evendID, void *data)
     s_graphics->EndCurrentCommandEncoder();
     
     id <MTLBlitCommandEncoder> blit = [s_graphics->CurrentCommandBuffer() blitCommandEncoder];
-    [blit copyFromBuffer:source sourceOffset:0 toBuffer:destination destinationOffset:0 size:args->length];
+    // NOTE: Compute buffers managed by Unity have a single int counter in the head of the buffer.
+    // To skip this part, a 4-byte offset is added to the sourceOffset argument.
+    [blit copyFromBuffer:source sourceOffset:4 toBuffer:destination destinationOffset:0 size:args->length];
 #ifdef USE_MANAGED_STORAGE
     [blit synchronizeResource:destination];
 #endif
