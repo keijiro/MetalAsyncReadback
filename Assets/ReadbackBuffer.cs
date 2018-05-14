@@ -20,6 +20,11 @@ public class ReadbackBuffer : IDisposable
 
     public NativeSlice<int> data { get { return _exposedData; } }
 
+    public ComputeBuffer sourceBuffer {
+        get { return _sourceBuffer; }
+        set { _sourceBuffer = value; }
+    }
+
     public ReadbackBuffer(ComputeBuffer source)
     {
         _sourceBuffer = source;
@@ -46,6 +51,9 @@ public class ReadbackBuffer : IDisposable
         else
         {
             var frame = _freeFrameQueue.Dequeue();
+            var args = frame.copyArgs[0];
+            args.source = _sourceBuffer.GetNativeBufferPtr();
+            frame.copyArgs[0] = args;
             Graphics.ExecuteCommandBuffer(frame.copyCommand);
             frame.readBuffer[0] = 0;
             _readbackQueue.Enqueue(frame);

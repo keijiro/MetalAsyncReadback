@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class Test : MonoBehaviour
 {
@@ -6,24 +7,31 @@ public class Test : MonoBehaviour
 
     [SerializeField, HideInInspector] ComputeShader _compute;
 
-    ComputeBuffer _gpuBuffer;
+    Queue<ComputeBuffer> _gpuBufferQueue = new Queue<ComputeBuffer>();
     ReadbackBuffer _readback;
 
     void OnEnable()
     {
-        _gpuBuffer = new ComputeBuffer(_bufferSize, 4);
-        _readback = new ReadbackBuffer(_gpuBuffer);
+        for (var i = 0; i < 4; i++)
+            _gpuBufferQueue.Enqueue(new ComputeBuffer(_bufferSize, 4));
+
+        _readback = new ReadbackBuffer(_gpuBufferQueue.Peek());
     }
 
     void OnDisable()
     {
         _readback.Dispose();
-        _gpuBuffer.Dispose();
+
+        while (_gpuBufferQueue.Count > 0)
+            _gpuBufferQueue.Dequeue().Dispose();
     }
 
     void Update()
     {
-        _compute.SetBuffer(0, "Destination", _gpuBuffer);
+        var gpuBuffer = _gpuBufferQueue.Dequeue();
+        _readback.sourceBuffer = gpuBuffer;
+
+        _compute.SetBuffer(0, "Destination", gpuBuffer);
         _compute.SetInt("FrameCount", Time.frameCount);
         _compute.Dispatch(0, _bufferSize / 64, 1, 1);
 
@@ -32,5 +40,7 @@ public class Test : MonoBehaviour
         var slice = _readback.data;
         if (slice.Length > 0)
             Debug.Log(string.Format("{0:X} : {1:X}", slice[0], slice[slice.Length - 1]));
+
+        _gpuBufferQueue.Enqueue(gpuBuffer);
     }
 }
