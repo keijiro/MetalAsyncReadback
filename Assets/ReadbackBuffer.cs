@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
@@ -9,22 +8,89 @@ using UnityEngine.Rendering;
 
 public class ReadbackBuffer : IDisposable
 {
-    #region Public methods
+    #region External objects
 
     ComputeBuffer _sourceBuffer;
+
+    #endregion
+
+    #region Public methods
+
+    NativeSlice<int> _exposedData;
+
+    public NativeSlice<int> data { get { return _exposedData; } }
 
     public ReadbackBuffer(ComputeBuffer source)
     {
         _sourceBuffer = source;
-        _command = new CommandBuffer();
     }
 
     public void Update()
     {
-        SetupQueue();
-        QueueFrame();
-        KickRetrieval();
+        while (_readbackQueue.Count > 0 && _readbackQueue.Peek().readBuffer[0] != 0)
+        {
+            var frame = _readbackQueue.Dequeue();
+            _freeFrameQueue.Enqueue(frame);
+        }
+
+        if (_freeFrameQueue.Count > 0)
+            _exposedData = new NativeSlice<int>(_freeFrameQueue.Peek().readBuffer, 1);
+
+        if (_freeFrameQueue.Count == 0)
+        {
+            var frame = new Frame();
+            frame.Allocate(_sourceBuffer);
+            Graphics.ExecuteCommandBuffer(frame.copyCommand);
+            _readbackQueue.Enqueue(frame);
+        }
+        else
+        {
+            var frame = _freeFrameQueue.Dequeue();
+            Graphics.ExecuteCommandBuffer(frame.copyCommand);
+            frame.readBuffer[0] = 0;
+            _readbackQueue.Enqueue(frame);
+        }
     }
+
+    #endregion
+
+    #region Frame read buffer
+
+    struct Frame
+    {
+        public NativeArray<int> readBuffer;
+        public NativeArray<CopyBufferEventArgs> copyArgs;
+        public CommandBuffer copyCommand;
+
+        unsafe public void Allocate(ComputeBuffer source)
+        {
+            readBuffer = new NativeArray<int>(source.count + 1, Allocator.Persistent);
+
+            copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
+            copyArgs[0] = new CopyBufferEventArgs {
+                source = source.GetNativeBufferPtr(),
+                destination = (IntPtr)readBuffer.GetUnsafePtr(),
+                lengthInBytes = source.count * 4
+            };
+
+            copyCommand = new CommandBuffer();
+            copyCommand.IssuePluginEventAndData(
+                BufferAccessor_GetCopyBufferCallback(),
+                0, (IntPtr)copyArgs.GetUnsafePtr()
+            );
+        }
+
+        public void Deallocate()
+        {
+            readBuffer.Dispose();
+            copyArgs.Dispose();
+            copyCommand.Dispose();
+            copyCommand = null;
+        }
+    }
+
+    Queue<Frame> _readbackQueue = new Queue<Frame>();
+    Queue<Frame> _freeFrameQueue = new Queue<Frame>();
 
     #endregion
 
@@ -44,9 +110,8 @@ public class ReadbackBuffer : IDisposable
 
         if (disposing)
         {
-            FinalizeQueue();
-            _command.Dispose();
-            _command = null;
+            while (_readbackQueue.Count > 0) _readbackQueue.Dequeue().Deallocate();
+            while (_freeFrameQueue.Count > 0) _freeFrameQueue.Dequeue().Deallocate();
         }
 
         _disposed = true;
@@ -69,147 +134,7 @@ public class ReadbackBuffer : IDisposable
     const string _dllName = "BufferAccessor";
     #endif
 
-    [DllImport(_dllName)] static extern IntPtr BufferAccessor_Create(int size);
-    [DllImport(_dllName)] static extern void BufferAccessor_Destroy(IntPtr buffer);
-    [DllImport(_dllName)] static extern IntPtr BufferAccessor_GetContents(IntPtr buffer);
     [DllImport(_dllName)] static extern IntPtr BufferAccessor_GetCopyBufferCallback();
-
-    #endregion
-
-    #region Shared command buffer for temporary use
-
-    CommandBuffer _command;
-
-    #endregion
-
-    #region Readback frame queue
-
-    struct Frame
-    {
-        public NativeArray<CopyBufferEventArgs> copyArgs;
-        public IntPtr copyBuffer;
-        public NativeArray<int> readBuffer;
-
-        public Frame(int bufferSize)
-        {
-            copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
-            copyBuffer = BufferAccessor_Create(4 * bufferSize);
-            readBuffer = new NativeArray<int>(bufferSize, Allocator.Persistent);
-        }
-
-        public void ReleaseResources()
-        {
-            if (copyBuffer != IntPtr.Zero) BufferAccessor_Destroy(copyBuffer);
-            copyArgs.Dispose();
-            readBuffer.Dispose();
-        }
-    }
-
-    Queue<Frame> _copyFrameQueue = new Queue<Frame>();
-    Queue<Frame> _retrievalQueue = new Queue<Frame>();
-
-    #endregion
-
-    #region Frame retrieval thread
-
-    struct RetrievalArgs
-    {
-        public IntPtr source;
-        public NativeArray<int> destination;
-        public int count;
-    }
-
-    Stack<Thread> _retrievalThreads = new Stack<Thread>();
-    AutoResetEvent _retrievalEvent = new AutoResetEvent(false);
-    RetrievalArgs _retrievalArgs;
-
-    public NativeArray<int> nativeArray {
-        get {
-            if (_retrievalQueue.Count == 0)
-                return new NativeArray<int>();
-            else
-                return _retrievalQueue.Peek().readBuffer;
-        }
-    }
-
-    unsafe void RetrievalThreadFunction()
-    {
-        while (true)
-        {
-            _retrievalEvent.WaitOne();
-
-            var args = _retrievalArgs;
-
-            UnsafeUtility.MemCpy(
-                args.destination.GetUnsafePtr(),
-                (void*)args.source,
-                args.count * 4
-            );
-        }
-    }
-
-    #endregion
-
-    #region Internal methods
-
-    void SetupQueue()
-    {
-        while (_copyFrameQueue.Count < 4)
-            _copyFrameQueue.Enqueue(new Frame(_sourceBuffer.count));
-
-        while (_retrievalQueue.Count < 2)
-            _retrievalQueue.Enqueue(new Frame(_sourceBuffer.count));
-
-        while (_retrievalThreads.Count < 2)
-        {
-            _retrievalThreads.Push(new Thread(RetrievalThreadFunction));
-            _retrievalThreads.Peek().Start();
-        }
-    }
-
-    void FinalizeQueue()
-    {
-        while (_retrievalThreads.Count > 0)
-            _retrievalThreads.Pop().Abort();
-
-        while (_copyFrameQueue.Count > 0)
-            _copyFrameQueue.Dequeue().ReleaseResources();
-
-        while (_retrievalQueue.Count > 0)
-            _retrievalQueue.Dequeue().ReleaseResources();
-    }
-
-    unsafe void QueueFrame()
-    {
-        var frame = _retrievalQueue.Dequeue();
-
-        frame.copyArgs[0] = new CopyBufferEventArgs {
-            source = _sourceBuffer.GetNativeBufferPtr(),
-            destination = frame.copyBuffer,
-            lengthInBytes = _sourceBuffer.count * 4
-        };
-
-        _command.Clear();
-        _command.IssuePluginEventAndData(
-            BufferAccessor_GetCopyBufferCallback(),
-            0, (IntPtr)frame.copyArgs.GetUnsafePtr()
-        );
-        Graphics.ExecuteCommandBuffer(_command);
-
-        _copyFrameQueue.Enqueue(frame);
-    }
-
-    void KickRetrieval()
-    {
-        var frame = _copyFrameQueue.Dequeue();
-        _retrievalArgs = new RetrievalArgs {
-            source = BufferAccessor_GetContents(frame.copyBuffer),
-            destination = frame.readBuffer,
-            count = _sourceBuffer.count
-        };
-        _retrievalEvent.Set();
-        _retrievalQueue.Enqueue(frame);
-    }
 
     #endregion
 }

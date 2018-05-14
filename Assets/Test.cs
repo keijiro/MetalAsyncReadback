@@ -27,10 +27,10 @@ public class Test : MonoBehaviour
         _compute.SetInt("FrameCount", Time.frameCount);
         _compute.Dispatch(0, _bufferSize / 64, 1, 1);
 
-        var na = _readback.nativeArray;
-        if (na.IsCreated)
-            Debug.Log(string.Format("{0:X} : {1:X}", na[0], na[na.Length - 1]));
-
         _readback.Update();
+
+        var slice = _readback.data;
+        if (slice.Length > 0)
+            Debug.Log(string.Format("{0:X} : {1:X}", slice[0], slice[slice.Length - 1]));
     }
 }
