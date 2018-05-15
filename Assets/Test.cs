@@ -41,5 +41,8 @@ public class Test : MonoBehaviour
         buffer.RequestReadback();
 
         _bufferQueue.Enqueue(buffer);
+
+        if ((Time.frameCount & 0xf) == 0)
+            Debug.Log("Queue length = " + _bufferQueue.Count);
     }
 }
