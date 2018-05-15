@@ -1,7 +1,11 @@
 #import <Metal/Metal.h>
-#import "IUnityGraphics.h"
-#import "IUnityGraphicsMetal.h"
+#import <TargetConditionals.h>
+#import "Unity/IUnityGraphics.h"
+#import "Unity/IUnityGraphicsMetal.h"
+
+#if TARGET_OS_IOS
 #import "UnityAppController.h"
+#endif
 
 #pragma mark Device interface retrieval
 
@@ -25,7 +29,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
     s_graphics = NULL;
 }
 
-#if PLATFORM_IOS
+#if TARGET_OS_IOS
 
 #pragma mark App controller subclasssing
 
@@ -59,20 +63,20 @@ CopyBufferArgs;
 static void CopyBufferCallback(int evendID, void *data)
 {
     if (GetMetalDevice() == nil || data == NULL) return;
-    
+
     CopyBufferArgs args = *(CopyBufferArgs*)data;
     if (args.source == NULL || args.destination == NULL) return;
-    
+
     id <MTLBuffer> source = (__bridge id <MTLBuffer>)args.source;
-    
-#if PLATFORM_OSX
+
+#if TARGET_OS_OSX
     // Synchronize the managed buffer in case of macOS.
     s_graphics->EndCurrentCommandEncoder();
     id <MTLBlitCommandEncoder> blit = [s_graphics->CurrentCommandBuffer() blitCommandEncoder];
     [blit synchronizeResource:source];
     [blit endEncoding];
 #endif
-    
+
     // Add command completion handler that kicks in the async copy block.
     [s_graphics->CurrentCommandBuffer() addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull cb) {
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
