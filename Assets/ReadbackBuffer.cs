@@ -9,9 +9,9 @@ public class ReadbackBuffer : IDisposable
 {
     #region Public members
 
-    public bool IsCompleted {
-        get { return _readBuffer[0] != 0; }
-    }
+    public ComputeBuffer Source { get { return _source; } }
+
+    public bool IsCompleted { get { return _readBuffer[0] != 0; } }
 
     public NativeSlice<int> Data {
         get { return new NativeSlice<int>(_readBuffer, 1); }
@@ -19,19 +19,22 @@ public class ReadbackBuffer : IDisposable
 
     unsafe public ReadbackBuffer(ComputeBuffer source)
     {
+        _source = source;
         _readBuffer = new NativeArray<int>(source.count + 1, Allocator.Persistent);
-        _copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
 
-        _copyArgs[0] = new CopyBufferEventArgs {
-            source = source.GetNativeBufferPtr(),
-            destination = (IntPtr)_readBuffer.GetUnsafePtr(),
-            lengthInBytes = source.count * 4
-        };
+        _copyArgs = GCHandle.Alloc(
+            new CopyBufferEventArgs {
+                source = source.GetNativeBufferPtr(),
+                destination = (IntPtr)_readBuffer.GetUnsafePtr(),
+                lengthInBytes = source.count * 4
+            },
+            GCHandleType.Pinned
+        );
 
         _copyCommand = new CommandBuffer();
         _copyCommand.IssuePluginEventAndData(
             BufferAccessor_GetCopyBufferCallback(),
-            0, (IntPtr)_copyArgs.GetUnsafePtr()
+            0, _copyArgs.AddrOfPinnedObject()
         );
     }
 
@@ -45,8 +48,9 @@ public class ReadbackBuffer : IDisposable
 
     #region Private members
 
+    ComputeBuffer _source;
     NativeArray<int> _readBuffer;
-    NativeArray<CopyBufferEventArgs> _copyArgs;
+    GCHandle _copyArgs;
     CommandBuffer _copyCommand;
 
     #endregion
@@ -68,7 +72,7 @@ public class ReadbackBuffer : IDisposable
         if (disposing)
         {
             _readBuffer.Dispose();
-            _copyArgs.Dispose();
+            _copyArgs.Free();
             _copyCommand.Dispose();
             _copyCommand = null;
         }
@@ -93,7 +97,8 @@ public class ReadbackBuffer : IDisposable
     const string _dllName = "BufferAccessor";
     #endif
 
-    [DllImport(_dllName)] static extern IntPtr BufferAccessor_GetCopyBufferCallback();
+    [DllImport(_dllName)]
+    static extern IntPtr BufferAccessor_GetCopyBufferCallback();
 
     #endregion
 }
