@@ -37,33 +37,29 @@ CopyBufferArgs;
 
 static void CopyBufferCallback(int evendID, void *data)
 {
-    if (GetMetalDevice() == nil) return;
-    if (data == NULL) return;
+    if (GetMetalDevice() == nil || data == NULL) return;
     
     CopyBufferArgs args = *(CopyBufferArgs*)data;
     if (args.source == NULL || args.destination == NULL) return;
+    
     id <MTLBuffer> source = (__bridge id <MTLBuffer>)args.source;
     
 #ifdef TARGET_OS_MAC
+    // Synchronize the managed buffer in case of macOS.
     s_graphics->EndCurrentCommandEncoder();
     id <MTLBlitCommandEncoder> blit = [s_graphics->CurrentCommandBuffer() blitCommandEncoder];
     [blit synchronizeResource:source];
     [blit endEncoding];
 #endif
     
+    // Add command completion handler that kicks in the async copy block.
     [s_graphics->CurrentCommandBuffer() addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull cb) {
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-            // NOTE: Compute buffers managed by Unity have a single int counter in the head of the buffer.
+            // NOTE: Compute buffers managed by Unity have a single int counter at the head of the buffer.
             // To skip this part, a 4-byte offset is added to the sourceOffset argument.
-//            void * dummy = malloc(args.length);
-            NSDate *start = NSDate.date;
+            // Also we use the first 4 bytes of the destination buffer to store the result.
             memcpy(args.destination + 4, source.contents + 4, args.length);
-//                     memcpy(dummy, source.contents + 4, args.length);
-            NSDate *end = NSDate.date;
-//            free(dummy);
-            NSTimeInterval time = [end timeIntervalSinceDate:start];
-            NSLog(@"executionTime = %f", time);
-            *(uint32_t *)args.destination = 1;
+            *(uint32_t *)args.destination = args.length;
         });
     }];
 }
