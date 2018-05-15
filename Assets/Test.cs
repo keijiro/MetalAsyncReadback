@@ -7,40 +7,57 @@ public class Test : MonoBehaviour
 
     [SerializeField, HideInInspector] ComputeShader _compute;
 
-    Queue<ComputeBuffer> _gpuBufferQueue = new Queue<ComputeBuffer>();
-    ReadbackBuffer _readback;
-
-    void OnEnable()
+    struct BufferPair
     {
-        for (var i = 0; i < 4; i++)
-            _gpuBufferQueue.Enqueue(new ComputeBuffer(_bufferSize, 4));
+        public ComputeBuffer compute;
+        public ReadbackBuffer readback;
 
-        _readback = new ReadbackBuffer(_gpuBufferQueue.Peek());
+        public void Dispose()
+        {
+            compute.Dispose();
+            readback.Dispose();
+        }
     }
+
+    Queue<BufferPair> _bufferQueue = new Queue<BufferPair>();
 
     void OnDisable()
     {
-        _readback.Dispose();
-
-        while (_gpuBufferQueue.Count > 0)
-            _gpuBufferQueue.Dequeue().Dispose();
+        while (_bufferQueue.Count > 0) _bufferQueue.Dequeue().Dispose();
     }
 
     void Update()
     {
-        var gpuBuffer = _gpuBufferQueue.Dequeue();
-        _readback.sourceBuffer = gpuBuffer;
-
-        _compute.SetBuffer(0, "Destination", gpuBuffer);
         _compute.SetInt("FrameCount", Time.frameCount);
-        _compute.Dispatch(0, _bufferSize / 64, 1, 1);
 
-        _readback.Update();
+        if (_bufferQueue.Count > 0 && _bufferQueue.Peek().readback.IsCompleted)
+        {
+            var pair = _bufferQueue.Dequeue();
 
-        var slice = _readback.data;
-        if (slice.Length > 0)
-            Debug.Log(string.Format("{0:X} : {1:X}", slice[0], slice[slice.Length - 1]));
+            var data = pair.readback.Data;
+            Debug.Log(string.Format(
+                "{0:X} : {1:X}", data[0], data[data.Length - 1]
+            ));
 
-        _gpuBufferQueue.Enqueue(gpuBuffer);
+            _compute.SetBuffer(0, "Destination", pair.compute);
+            _compute.Dispatch(0, _bufferSize / 64, 1, 1);
+            pair.readback.RequestReadback();
+
+            _bufferQueue.Enqueue(pair);
+        }
+        else
+        {
+            var cb = new ComputeBuffer(_bufferSize, 4);
+
+            var pair = new BufferPair {
+                compute = cb, readback = new ReadbackBuffer(cb)
+            };
+
+            _compute.SetBuffer(0, "Destination", cb);
+            _compute.Dispatch(0, _bufferSize / 64, 1, 1);
+            pair.readback.RequestReadback();
+
+            _bufferQueue.Enqueue(pair);
+        }
     }
 }

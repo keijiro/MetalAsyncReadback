@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -8,97 +7,47 @@ using UnityEngine.Rendering;
 
 public class ReadbackBuffer : IDisposable
 {
-    #region External objects
+    #region Public members
 
-    ComputeBuffer _sourceBuffer;
-
-    #endregion
-
-    #region Public methods
-
-    NativeSlice<int> _exposedData;
-
-    public NativeSlice<int> data { get { return _exposedData; } }
-
-    public ComputeBuffer sourceBuffer {
-        get { return _sourceBuffer; }
-        set { _sourceBuffer = value; }
+    public bool IsCompleted {
+        get { return _readBuffer[0] != 0; }
     }
 
-    public ReadbackBuffer(ComputeBuffer source)
-    {
-        _sourceBuffer = source;
+    public NativeSlice<int> Data {
+        get { return new NativeSlice<int>(_readBuffer, 1); }
     }
 
-    public void Update()
+    unsafe public ReadbackBuffer(ComputeBuffer source)
     {
-        while (_readbackQueue.Count > 0 && _readbackQueue.Peek().readBuffer[0] != 0)
-        {
-            var frame = _readbackQueue.Dequeue();
-            _freeFrameQueue.Enqueue(frame);
-        }
+        _readBuffer = new NativeArray<int>(source.count + 1, Allocator.Persistent);
+        _copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
 
-        if (_freeFrameQueue.Count > 0)
-            _exposedData = new NativeSlice<int>(_freeFrameQueue.Peek().readBuffer, 1);
+        _copyArgs[0] = new CopyBufferEventArgs {
+            source = source.GetNativeBufferPtr(),
+            destination = (IntPtr)_readBuffer.GetUnsafePtr(),
+            lengthInBytes = source.count * 4
+        };
 
-        if (_freeFrameQueue.Count == 0)
-        {
-            var frame = new Frame();
-            frame.Allocate(_sourceBuffer);
-            Graphics.ExecuteCommandBuffer(frame.copyCommand);
-            _readbackQueue.Enqueue(frame);
-        }
-        else
-        {
-            var frame = _freeFrameQueue.Dequeue();
-            var args = frame.copyArgs[0];
-            args.source = _sourceBuffer.GetNativeBufferPtr();
-            frame.copyArgs[0] = args;
-            Graphics.ExecuteCommandBuffer(frame.copyCommand);
-            frame.readBuffer[0] = 0;
-            _readbackQueue.Enqueue(frame);
-        }
+        _copyCommand = new CommandBuffer();
+        _copyCommand.IssuePluginEventAndData(
+            BufferAccessor_GetCopyBufferCallback(),
+            0, (IntPtr)_copyArgs.GetUnsafePtr()
+        );
+    }
+
+    public void RequestReadback()
+    {
+        Graphics.ExecuteCommandBuffer(_copyCommand);
+        _readBuffer[0] = 0;
     }
 
     #endregion
 
-    #region Frame read buffer
+    #region Private members
 
-    struct Frame
-    {
-        public NativeArray<int> readBuffer;
-        public NativeArray<CopyBufferEventArgs> copyArgs;
-        public CommandBuffer copyCommand;
-
-        unsafe public void Allocate(ComputeBuffer source)
-        {
-            readBuffer = new NativeArray<int>(source.count + 1, Allocator.Persistent);
-
-            copyArgs = new NativeArray<CopyBufferEventArgs>(1, Allocator.Persistent);
-            copyArgs[0] = new CopyBufferEventArgs {
-                source = source.GetNativeBufferPtr(),
-                destination = (IntPtr)readBuffer.GetUnsafePtr(),
-                lengthInBytes = source.count * 4
-            };
-
-            copyCommand = new CommandBuffer();
-            copyCommand.IssuePluginEventAndData(
-                BufferAccessor_GetCopyBufferCallback(),
-                0, (IntPtr)copyArgs.GetUnsafePtr()
-            );
-        }
-
-        public void Deallocate()
-        {
-            readBuffer.Dispose();
-            copyArgs.Dispose();
-            copyCommand.Dispose();
-            copyCommand = null;
-        }
-    }
-
-    Queue<Frame> _readbackQueue = new Queue<Frame>();
-    Queue<Frame> _freeFrameQueue = new Queue<Frame>();
+    NativeArray<int> _readBuffer;
+    NativeArray<CopyBufferEventArgs> _copyArgs;
+    CommandBuffer _copyCommand;
 
     #endregion
 
@@ -118,8 +67,10 @@ public class ReadbackBuffer : IDisposable
 
         if (disposing)
         {
-            while (_readbackQueue.Count > 0) _readbackQueue.Dequeue().Deallocate();
-            while (_freeFrameQueue.Count > 0) _freeFrameQueue.Dequeue().Deallocate();
+            _readBuffer.Dispose();
+            _copyArgs.Dispose();
+            _copyCommand.Dispose();
+            _copyCommand = null;
         }
 
         _disposed = true;
