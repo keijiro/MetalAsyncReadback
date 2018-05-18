@@ -33,7 +33,7 @@ public class ReadbackBuffer : IDisposable
 
         _copyCommand = new CommandBuffer();
         _copyCommand.IssuePluginEventAndData(
-            BufferAccessor_GetCopyBufferCallback(),
+            CopyBuffer_GetCallback(),
             0, _copyArgs.AddrOfPinnedObject()
         );
     }
@@ -72,7 +72,7 @@ public class ReadbackBuffer : IDisposable
         if (disposing)
         {
             // Synchronize with the memcpy tasks before disposing the resources.
-            BufferAccessor_WaitTasks();
+            CopyBuffer_WaitTasks();
 
             // Dispose all the unmanaged resources.
             _readBuffer.Dispose();
@@ -98,14 +98,14 @@ public class ReadbackBuffer : IDisposable
     #if !UNITY_EDITOR && UNITY_IOS
     const string _dllName = "__Internal";
     #else
-    const string _dllName = "BufferAccessor";
+    const string _dllName = "CopyBuffer";
     #endif
 
     [DllImport(_dllName)]
-    static extern IntPtr BufferAccessor_GetCopyBufferCallback();
+    static extern IntPtr CopyBuffer_GetCallback();
 
     [DllImport(_dllName)]
-    static extern void BufferAccessor_WaitTasks();
+    static extern void CopyBuffer_WaitTasks();
 
     #endregion
 }

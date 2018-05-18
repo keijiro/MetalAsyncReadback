@@ -1,5 +1,5 @@
-MetalBufferAccessor
--------------------
+MetalAsyncReadback
+------------------
 
 This is an example that shows how to asynchronously read back GPU data into the
 system memory in Unity running with the Metal graphics API mode (macOS/iOS).

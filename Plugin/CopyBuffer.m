@@ -3,10 +3,6 @@
 #import "Unity/IUnityGraphics.h"
 #import "Unity/IUnityGraphicsMetal.h"
 
-#if TARGET_OS_IOS
-#import "UnityAppController.h"
-#endif
-
 #pragma mark Device interface retrieval
 
 static IUnityInterfaces *s_interfaces;
@@ -29,28 +25,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
     s_graphics = NULL;
 }
 
-#if TARGET_OS_IOS
-
-#pragma mark App controller subclasssing
-
-@interface MyAppController : UnityAppController
-{
-}
-- (void)shouldAttachRenderDelegate;
-@end
-
-@implementation MyAppController
-- (void)shouldAttachRenderDelegate;
-{
-    UnityRegisterRenderingPluginV5(&UnityPluginLoad, &UnityPluginUnload);
-}
-@end
-
-IMPL_APP_CONTROLLER_SUBCLASS(MyAppController);
-
-#endif
-
-#pragma mark CopyBuffer event callback
+#pragma mark - CopyBuffer event callback
 
 typedef struct
 {
@@ -58,13 +33,15 @@ typedef struct
     void* destination;  // byte*
     int32_t length;
 }
-CopyBufferArgs;
+CopyBufferEventArgs;
 
-static void CopyBufferCallback(int evendID, void *data)
+static dispatch_group_t s_taskGroup;
+
+static void CopyBufferEventCallback(int evendID, void *data)
 {
     if (GetMetalDevice() == nil || data == NULL) return;
 
-    CopyBufferArgs args = *(CopyBufferArgs*)data;
+    CopyBufferEventArgs args = *(CopyBufferEventArgs*)data;
     if (args.source == NULL || args.destination == NULL) return;
 
     id <MTLBuffer> source = (__bridge id <MTLBuffer>)args.source;
@@ -77,9 +54,12 @@ static void CopyBufferCallback(int evendID, void *data)
     [blit endEncoding];
 #endif
 
+    // Dispatch group for background memcpy operations.
+    if (s_taskGroup == NULL) s_taskGroup = dispatch_group_create();
+
     // Add command completion handler that kicks in the async copy block.
     [s_graphics->CurrentCommandBuffer() addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull cb) {
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+        dispatch_group_async(s_taskGroup, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
             // NOTE: Compute buffers managed by Unity have a single int counter at the head of the buffer.
             // To skip this part, a 4-byte offset is added to the sourceOffset argument.
             // Also we use the first 4 bytes of the destination buffer to store the result.
@@ -89,7 +69,12 @@ static void CopyBufferCallback(int evendID, void *data)
     }];
 }
 
-UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API BufferAccessor_GetCopyBufferCallback()
+UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_GetCallback()
 {
-    return CopyBufferCallback;
+    return CopyBufferEventCallback;
+}
+
+void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_WaitTasks()
+{
+    if (s_taskGroup != NULL) dispatch_group_wait(s_taskGroup, DISPATCH_TIME_FOREVER);
 }

@@ -7,13 +7,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>BufferAccessor</string>
+	<string>CopyBuffer</string>
 	<key>CFBundleIdentifier</key>
-	<string>jp.radiumsoftware.BufferAccessor</string>
+	<string>jp.radiumsoftware.CopyBuffer</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>BufferAccessor</string>
+	<string>CopyBuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>

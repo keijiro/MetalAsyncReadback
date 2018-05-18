@@ -3,10 +3,6 @@
 #import "Unity/IUnityGraphics.h"
 #import "Unity/IUnityGraphicsMetal.h"
 
-#if TARGET_OS_IOS
-#import "UnityAppController.h"
-#endif
-
 #pragma mark Device interface retrieval
 
 static IUnityInterfaces *s_interfaces;
@@ -29,28 +25,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
     s_graphics = NULL;
 }
 
-#if TARGET_OS_IOS
-
-#pragma mark App controller subclasssing
-
-@interface MyAppController : UnityAppController
-{
-}
-- (void)shouldAttachRenderDelegate;
-@end
-
-@implementation MyAppController
-- (void)shouldAttachRenderDelegate;
-{
-    UnityRegisterRenderingPluginV5(&UnityPluginLoad, &UnityPluginUnload);
-}
-@end
-
-IMPL_APP_CONTROLLER_SUBCLASS(MyAppController);
-
-#endif
-
-#pragma mark CopyBuffer event callback
+#pragma mark - CopyBuffer event callback
 
 typedef struct
 {
@@ -58,15 +33,15 @@ typedef struct
     void* destination;  // byte*
     int32_t length;
 }
-CopyBufferArgs;
+CopyBufferEventArgs;
 
 static dispatch_group_t s_taskGroup;
 
-static void CopyBufferCallback(int evendID, void *data)
+static void CopyBufferEventCallback(int evendID, void *data)
 {
     if (GetMetalDevice() == nil || data == NULL) return;
 
-    CopyBufferArgs args = *(CopyBufferArgs*)data;
+    CopyBufferEventArgs args = *(CopyBufferEventArgs*)data;
     if (args.source == NULL || args.destination == NULL) return;
 
     id <MTLBuffer> source = (__bridge id <MTLBuffer>)args.source;
@@ -94,12 +69,12 @@ static void CopyBufferCallback(int evendID, void *data)
     }];
 }
 
-UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API BufferAccessor_GetCopyBufferCallback()
+UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_GetCallback()
 {
-    return CopyBufferCallback;
+    return CopyBufferEventCallback;
 }
 
-void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API BufferAccessor_WaitTasks()
+void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_WaitTasks()
 {
     if (s_taskGroup != NULL) dispatch_group_wait(s_taskGroup, DISPATCH_TIME_FOREVER);
 }
