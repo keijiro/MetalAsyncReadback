@@ -71,6 +71,10 @@ public class ReadbackBuffer : IDisposable
 
         if (disposing)
         {
+            // Synchronize with the memcpy tasks before disposing the resources.
+            BufferAccessor_WaitTasks();
+
+            // Dispose all the unmanaged resources.
             _readBuffer.Dispose();
             _copyArgs.Free();
             _copyCommand.Dispose();
@@ -99,6 +103,9 @@ public class ReadbackBuffer : IDisposable
 
     [DllImport(_dllName)]
     static extern IntPtr BufferAccessor_GetCopyBufferCallback();
+
+    [DllImport(_dllName)]
+    static extern void BufferAccessor_WaitTasks();
 
     #endregion
 }
