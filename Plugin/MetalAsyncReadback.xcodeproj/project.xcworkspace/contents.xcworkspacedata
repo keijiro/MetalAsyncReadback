@@ -2,6 +2,6 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "self:/Users/keijiro/Documents/MetalBufferAccessor/Plugin/CopyBuffer.xcodeproj">
+      location = "self:/Users/keijiro/Documents/MetalBufferAccessor/Plugin/MetalAsyncReadback.xcodeproj">
    </FileRef>
 </Workspace>

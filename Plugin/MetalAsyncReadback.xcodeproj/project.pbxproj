@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0FD59212209FD06D00FA4CB5 /* CopyBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FD59211209FD06D00FA4CB5 /* CopyBuffer.m */; };
+		0FD59212209FD06D00FA4CB5 /* MetalAsyncReadback.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FD59211209FD06D00FA4CB5 /* MetalAsyncReadback.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0FD59208209FD04900FA4CB5 /* CopyBuffer.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CopyBuffer.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		0FD59208209FD04900FA4CB5 /* MetalAsyncReadback.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MetalAsyncReadback.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		0FD5920B209FD04900FA4CB5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		0FD59211209FD06D00FA4CB5 /* CopyBuffer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CopyBuffer.m; sourceTree = "<group>"; };
+		0FD59211209FD06D00FA4CB5 /* MetalAsyncReadback.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MetalAsyncReadback.m; sourceTree = "<group>"; };
 		0FD59213209FD20000FA4CB5 /* Unity */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Unity; sourceTree = "<group>"; };
 		0FD59215209FD2F900FA4CB5 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -33,7 +33,7 @@
 			isa = PBXGroup;
 			children = (
 				0FD59213209FD20000FA4CB5 /* Unity */,
-				0FD59211209FD06D00FA4CB5 /* CopyBuffer.m */,
+				0FD59211209FD06D00FA4CB5 /* MetalAsyncReadback.m */,
 				0FD5920B209FD04900FA4CB5 /* Info.plist */,
 				0FD59209209FD04900FA4CB5 /* Products */,
 				0FD59214209FD2F900FA4CB5 /* Frameworks */,
@@ -43,7 +43,7 @@
 		0FD59209209FD04900FA4CB5 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0FD59208209FD04900FA4CB5 /* CopyBuffer.bundle */,
+				0FD59208209FD04900FA4CB5 /* MetalAsyncReadback.bundle */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -59,9 +59,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0FD59207209FD04900FA4CB5 /* CopyBuffer */ = {
+		0FD59207209FD04900FA4CB5 /* MetalAsyncReadback */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0FD5920E209FD04900FA4CB5 /* Build configuration list for PBXNativeTarget "CopyBuffer" */;
+			buildConfigurationList = 0FD5920E209FD04900FA4CB5 /* Build configuration list for PBXNativeTarget "MetalAsyncReadback" */;
 			buildPhases = (
 				0FD59204209FD04900FA4CB5 /* Sources */,
 				0FD59205209FD04900FA4CB5 /* Frameworks */,
@@ -71,9 +71,9 @@
 			);
 			dependencies = (
 			);
-			name = CopyBuffer;
-			productName = CopyBuffer;
-			productReference = 0FD59208209FD04900FA4CB5 /* CopyBuffer.bundle */;
+			name = MetalAsyncReadback;
+			productName = MetalAsyncReadback;
+			productReference = 0FD59208209FD04900FA4CB5 /* MetalAsyncReadback.bundle */;
 			productType = "com.apple.product-type.bundle";
 		};
 /* End PBXNativeTarget section */
@@ -90,7 +90,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 0FD59203209FD04900FA4CB5 /* Build configuration list for PBXProject "CopyBuffer" */;
+			buildConfigurationList = 0FD59203209FD04900FA4CB5 /* Build configuration list for PBXProject "MetalAsyncReadback" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -102,7 +102,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0FD59207209FD04900FA4CB5 /* CopyBuffer */,
+				0FD59207209FD04900FA4CB5 /* MetalAsyncReadback */,
 			);
 		};
 /* End PBXProject section */
@@ -122,7 +122,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0FD59212209FD06D00FA4CB5 /* CopyBuffer.m in Sources */,
+				0FD59212209FD06D00FA4CB5 /* MetalAsyncReadback.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +242,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				PRODUCT_BUNDLE_IDENTIFIER = jp.radiumsoftware.CopyBuffer;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.radiumsoftware.MetalAsyncReadback;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				WRAPPER_EXTENSION = bundle;
@@ -255,7 +255,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				PRODUCT_BUNDLE_IDENTIFIER = jp.radiumsoftware.CopyBuffer;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.radiumsoftware.MetalAsyncReadback;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				WRAPPER_EXTENSION = bundle;
@@ -265,7 +265,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0FD59203209FD04900FA4CB5 /* Build configuration list for PBXProject "CopyBuffer" */ = {
+		0FD59203209FD04900FA4CB5 /* Build configuration list for PBXProject "MetalAsyncReadback" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0FD5920C209FD04900FA4CB5 /* Debug */,
@@ -274,7 +274,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0FD5920E209FD04900FA4CB5 /* Build configuration list for PBXNativeTarget "CopyBuffer" */ = {
+		0FD5920E209FD04900FA4CB5 /* Build configuration list for PBXNativeTarget "MetalAsyncReadback" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0FD5920F209FD04900FA4CB5 /* Debug */,

@@ -25,7 +25,7 @@ void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API UnityPluginUnload(void)
     s_graphics = NULL;
 }
 
-#pragma mark - CopyBuffer event callback
+#pragma mark - Readback event callback
 
 typedef struct
 {
@@ -33,15 +33,15 @@ typedef struct
     void* destination;  // byte*
     int32_t length;
 }
-CopyBufferEventArgs;
+ReadbackEventArgs;
 
 static dispatch_group_t s_taskGroup;
 
-static void CopyBufferEventCallback(int evendID, void *data)
+static void ReadbackEventCallback(int evendID, void *data)
 {
     if (GetMetalDevice() == nil || data == NULL) return;
 
-    CopyBufferEventArgs args = *(CopyBufferEventArgs*)data;
+    ReadbackEventArgs args = *(ReadbackEventArgs*)data;
     if (args.source == NULL || args.destination == NULL) return;
 
     id <MTLBuffer> source = (__bridge id <MTLBuffer>)args.source;
@@ -69,12 +69,12 @@ static void CopyBufferEventCallback(int evendID, void *data)
     }];
 }
 
-UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_GetCallback()
+UnityRenderingEventAndData UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API MetalAsyncReadback_GetCallback()
 {
-    return CopyBufferEventCallback;
+    return ReadbackEventCallback;
 }
 
-void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API CopyBuffer_WaitTasks()
+void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API MetalAsyncReadback_WaitTasks()
 {
     if (s_taskGroup != NULL) dispatch_group_wait(s_taskGroup, DISPATCH_TIME_FOREVER);
 }
