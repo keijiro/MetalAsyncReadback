@@ -1,49 +1,45 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
-using MetalAsyncReadback;
+using Klak.GpuMemory;
 
 public class Test : MonoBehaviour
 {
     [SerializeField] int _bufferSize = 1920 * 1080;
-
     [SerializeField, HideInInspector] ComputeShader _compute;
 
-    Queue<ReadbackBuffer> _bufferQueue = new Queue<ReadbackBuffer>();
-
-    void CheckData(NativeSlice<int> data)
-    {
-        Debug.Log(string.Format("{0:X} : {1:X}", data[0], data[data.Length - 1]));
-    }
-
-    void DisposeBuffer(ReadbackBuffer buffer)
-    {
-        buffer.Source.Dispose();
-        buffer.Dispose();
-    }
+    ComputeBuffer _source;
+    Queue<ReadbackRequest> _queue = new Queue<ReadbackRequest>();
 
     void OnDisable()
     {
-        while (_bufferQueue.Count > 0) DisposeBuffer(_bufferQueue.Dequeue());
+        _source.Dispose();
+        _source = null;
+
+        _queue.Clear();
+
+        ReadbackManager.Cleanup();
     }
 
     void Update()
     {
-        var canDequeue = (_bufferQueue.Count > 0 && _bufferQueue.Peek().IsCompleted);
+        ReadbackManager.Update();
 
-        if (canDequeue) CheckData(_bufferQueue.Peek().Data);
+        while (_queue.Count > 0 && _queue.Peek().IsCompleted)
+        {
+            var data = _queue.Dequeue().Data;
+            Debug.Log(string.Format("{0:X} : {1:X}", data[0], data[data.Length - 1]));
+        }
 
-        var buffer = canDequeue ? _bufferQueue.Dequeue() : 
-            new ReadbackBuffer(new ComputeBuffer(_bufferSize, 4));
+        if (_source == null) _source = new ComputeBuffer(_bufferSize, 4);
 
         _compute.SetInt("FrameCount", Time.frameCount);
-        _compute.SetBuffer(0, "Destination", buffer.Source);
+        _compute.SetBuffer(0, "Destination", _source);
         _compute.Dispatch(0, _bufferSize / 64, 1, 1);
-        buffer.RequestReadback();
 
-        _bufferQueue.Enqueue(buffer);
+        _queue.Enqueue(ReadbackManager.CreateRequest(_source));
 
         if ((Time.frameCount & 0xf) == 0)
-            Debug.Log("Queue length = " + _bufferQueue.Count);
+            Debug.Log("Queue length = " + _queue.Count);
     }
 }
